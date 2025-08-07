@@ -328,10 +328,6 @@ Note: This checklist and the methods shared here are still a work in progress. I
 Conclusion
 This methodology offers a structured and proven approach to web application security testing, built on years of hands-on experience from the bug bounty community. While tools play a role, true success comes from understanding core technologies, thinking like an attacker and staying persistent through trial and error.
 
-Connect with Me
-If you enjoyed this article and want to stay updated with more content on bug bounty and cybersecurity follow me on:
-Twitter (X): @coffinxp7 | GitHub coffinxp | Website: lostsec.xyz | YouTube: Lostsec | Discord Lostsec
-
 Disclaimer
 The content provided in this article is for educational and informational purposes only. Always ensure you have proper authorization before conducting security assessments. Use this information responsibly.
 
